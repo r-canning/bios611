@@ -62,4 +62,5 @@ state_count <- state %>%
 
 all2 <- merge(all, state_count[,c(1,54:58)], by="UnitID", all.x = TRUE)
 
+
 saveRDS(all2, "work/data/ipeds_state.RDS")

@@ -1,0 +1,162 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-11-18"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+```
+
+```{r}
+ipeds <- readRDS("~/work/data/ipeds_state_na_rm.RDS")
+dict_sub <- readRDS("~/work/data/dict_sub2.RDS")
+```
+
+```{r}
+summary(ipeds$out_state_pct)
+hist(ipeds$out_state_pct)
+
+
+ipeds$out_group <- with(ipeds,ifelse(out_state_pct <= .05, 0,
+                                     ifelse(out_state_pct <= .2813,1,
+                                            ifelse(out_state_pct <= 0.4860,2,3))))
+ipeds$out_group <- factor(ipeds$out_group, labels = c("0-5%","Low","Medium","High"))
+
+table(ipeds$out_group, useNA = "always")
+```
+
+
+```{r}
+ipeds %>%
+  subset(!is.na(out_group)&!is.na(ADM_RATE)) %>%
+  ggplot(aes(x=out_group, y = ADM_RATE))+
+  geom_boxplot()
+```
+
+```{r}
+ipeds %>%
+  subset(!is.na(out_group)&!is.na(SATVR75)) %>%
+  ggplot(aes(x=out_group, y = SATVR75))+
+  geom_boxplot()
+```
+
+```{r}
+ipeds %>%
+  subset(!is.na(out_group)&!is.na(SATMT75)) %>%
+  ggplot(aes(x=out_group, y = SATMT75))+
+  geom_boxplot()
+```
+SAT_AVG
+
+```{r}
+ipeds %>%
+  subset(!is.na(out_group)&!is.na(SAT_AVG)) %>%
+  ggplot(aes(x=out_group, y = SAT_AVG))+
+  geom_boxplot()
+```
+
+```{r}
+ipeds %>%
+  subset(!is.na(out_group)&!is.na(PCIP11)&PCIP11<.5) %>%
+  ggplot(aes(x=out_group, y = PCIP11))+
+  geom_boxplot()
+```
+
+
+```{r}
+degreelabs <- dict_sub%>%
+  filter(grepl("PCIP", `VARIABLE NAME`))%>%
+  select(c(`VARIABLE NAME`,LABEL))
+
+degrees <- ipeds %>%
+  subset(!is.na(out_group))%>%
+  select(c(UnitID,out_group,INSTNM,CITY,STABBR,ADM_RATE,total,out_state_pct,PCIP01:PCIP54))%>%
+  pivot_longer(
+    cols = starts_with("PCIP"),
+    names_to = "Category",
+    values_to = "Proportion"
+  )
+
+degrees_sum <- degrees %>%
+  group_by(out_group, Category) %>%
+  summarise(
+    mean_proportion = mean(Proportion, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+degrees_sum <- merge(degrees_sum, degreelabs, by.x = "Category", by.y="VARIABLE NAME",all.x = TRUE)
+```
+
+
+```{r,fig.width=8in}
+ggplot(degrees_sum,
+       aes(y = LABEL,
+           x = out_group,
+           fill = mean_proportion)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(
+    name = "Mean Proportion"
+  ) +
+  labs(
+    x = "Program Category",
+    y = "Group"
+  ) +
+  # scale_y_discrete(labels = scales::label_wrap(50))+
+  theme_minimal()+
+    theme(
+    axis.text.y = element_text(vjust = 1)
+  )
+```
+
+```{r}
+categorical <- subset(dict_sub,grepl("program.bachelors.", `developer-friendly name`, fixed = TRUE))$`VARIABLE NAME`
+prop <- subset(dict_sub,grepl("PCIP", `VARIABLE NAME`, fixed = TRUE))$`VARIABLE NAME`
+covariates <- c("STUFACR",
+"GRADS",
+"UGDS",
+"UGDS_MEN",
+"UGDS_WOMEN",
+"UG12MN",
+"TUITIONFEE_OUT",
+"TUITIONFEE_IN",
+prop,
+"ADM_RATE",
+"SATVR75",
+"SATMT75",
+categorical
+)
+
+formula <- reformulate(covariates, response = "out_state_pct")
+
+fit <- lm(formula, data = ipeds)
+summary(fit)
+```
+
+Outcome
+out_state_pct
+
+OK potentially interesting variables
+STUFACR
+GRADS
+UGDS
+UGDS_MEN
+UGDS_WOMEN
+UG12MN
+TUITIONFEE_OUT
+TUITIONFEE_IN
+PCIP01:PCIP54
+ADM_RATE
+SATVR75
+SATMT75
+
+
+categorical <- subset(dict_sub2,grepl("program.bachelors.", `developer-friendly name`, fixed = TRUE))$`VARIABLE NAME`
+CIP01BACHL:CIP54BACHL
+• 0: Program not offered.
+• 1: Program offered (in-person / on-campus).
+• 2: Program offered exclusively via distance education (online).
